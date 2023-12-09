@@ -1,0 +1,27 @@
+[package]
+name = "unitfuzzer"
+version = "0.1.0"
+authors = ["Jan Brandstetter"]
+edition = "2021"
+
+[lib]
+name = "unitfuzzer"
+crate_type = ["staticlib"]
+
+[features]
+default = ["std"]
+std = []
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+
+[dependencies]
+libafl = { path = "../../libafl/", features = [ "std", "frida_cli" ] }
+libafl_bolts = { path = "../../libafl_bolts/" }
+frida-gum = { version = "0.13.2", features = [ "auto-download", "event-sink", "invocation-listener" ] }
+libafl_frida = { path = "../../libafl_frida" }
+libafl_targets = { path = "../../libafl_targets" }
+libloading = "0.7"
+mimalloc = { version = "*", default-features = false }
