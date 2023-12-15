@@ -1,7 +1,3 @@
-use mimalloc::MiMalloc;
-#[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
-//use std::path::PathBuf;
 use frida_gum::Gum;
 use libafl::{
     corpus::{
@@ -15,8 +11,6 @@ use libafl::{
         EventConfig,
         launcher::Launcher,
         llmp::LlmpRestartingEventManager,
-        //simple::SimpleEventManager,
-        //tcp::TcpRestartingEventManager,
     },
     executors::{
         ExitKind,
@@ -41,7 +35,7 @@ use libafl::{
         HasTargetBytes,
     },
     monitors::{
-        //MultiMonitor,
+        multi::MultiMonitor,
         tui::{
             TuiMonitor,
             ui::TuiUI,
@@ -105,23 +99,82 @@ use libafl_frida::{
     executor::FridaInProcessExecutor,
     helper::FridaInstrumentationHelper,
 };
+use mimalloc::MiMalloc;
+use std::fs::File;
+use std::io::Read;
+//use std::path::PathBuf;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 pub fn main() {
     let options = parse_args();
 
-    unsafe {
-        match fuzz(&options) {
-            Ok(()) | Err(Error::ShuttingDown) => println!("\nFinished fuzzing. Good bye."),
-            Err(e) => panic!("Error during fuzzing: {e:?}"),
+    if options.replay.is_some() {
+        unsafe {
+            match replay(&options) {
+                Ok(()) | Err(Error::ShuttingDown) => println!("\nFinished replaying. Good bye."),
+                Err(e) => panic!("Error during replay: {e:?}"),
+            } 
+        }
+    } else {
+        unsafe {
+            match fuzz(&options) {
+                Ok(()) | Err(Error::ShuttingDown) => println!("\nFinished fuzzing. Good bye."),
+                Err(e) => panic!("Error during fuzzing: {e:?}"),
+            }
         }
     }
 }
 
-#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
+unsafe fn replay(options: &FuzzerOptions) -> Result<(), Error> {
+    let lib = libloading::Library::new(options.clone().harness.unwrap()).unwrap();
+        let target_func: libloading::Symbol<
+            unsafe extern "C" fn(data: *const u8, size: usize) -> i32
+        > = lib.get(options.harness_function.as_bytes()).unwrap();
+
+    let frida_harness = |input: &BytesInput| {
+        let target = input.target_bytes();
+        let buf = target.as_slice();
+        target_func(buf.as_ptr(), buf.len());
+        ExitKind::Ok
+    };
+
+    println!("Let's replay!");
+
+    let mut file = File::open(options.replay.clone().unwrap()).unwrap_or_else(|_| {
+        panic!("Failed to open replay file {:?}", options.replay.clone().unwrap())
+    });
+
+    let mut buffer = Vec::new();
+
+    file.read_to_end(&mut buffer).unwrap_or_else(|_| {
+        panic!("Failed to read replay file {:?}", options.replay.clone().unwrap())
+    });
+
+    let input = BytesInput::new(buffer);
+
+    let repetitions = match options.repeat.is_some() {
+        true => options.repeat.unwrap(),
+        false => 1,
+    };
+    
+    for n in 0..repetitions {
+        println!("Replay number {}...", n + 1);
+        frida_harness(&input);
+        println!("finished.");
+    };
+
+    Ok(())
+}
+
 unsafe fn fuzz(options: &FuzzerOptions) -> Result<(), Error> {
-    let ui = TuiUI::with_version(String::from("Lab Fuzzer Frida"), String::from("0.0.5"), false);
+    #[cfg(not(feature = "tui"))]
+    let monitor = MultiMonitor::new(|s| println!("{s}"));
+    #[cfg(feature = "tui")]
+    let ui = TuiUI::with_version(String::from("UnitFuzzer"), String::from("0.3.0"), false);
+    #[cfg(feature = "tui")]
     let monitor = TuiMonitor::new(ui);
-    //let monitor = MultiMonitor::new(|s| println!("{s}"));
 
     let shmem_provider = StdShMemProvider::new()?;
 
@@ -138,6 +191,7 @@ unsafe fn fuzz(options: &FuzzerOptions) -> Result<(), Error> {
             ExitKind::Ok
         };
 
+        // Fuzzing client
         (|state: Option<_>, mut mgr: LlmpRestartingEventManager<_, _>, _core_id| {
             let gum = Gum::obtain();
 
@@ -151,7 +205,6 @@ unsafe fn fuzz(options: &FuzzerOptions) -> Result<(), Error> {
                 frida_helper.map_mut_ptr().unwrap(),
                 MAP_SIZE,
             ));
-
             // Create an observation channel to keep track of the execution time
             let time_observer = TimeObserver::new("time");
 
@@ -174,10 +227,16 @@ unsafe fn fuzz(options: &FuzzerOptions) -> Result<(), Error> {
                 feedback_and_fast!(ConstFeedback::from(false), AsanErrorsFeedback::new())
             );
 
+            // Initialize seed for random number generation
+            let seed: u64 = match options.seed.is_some() {
+                true => options.seed.unwrap(),
+                false => current_nanos(),
+            };
+
             // If not restarting, create a State from scratch
             let mut state = state.unwrap_or_else(|| {
                 StdState::new(
-                    StdRand::with_seed(current_nanos()),
+                    StdRand::with_seed(seed),
                     //CachedOnDiskCorpus::no_meta(PathBuf::from("./corpus_discovered"), 64).unwrap(),
                     InMemoryCorpus::new(),
                     OnDiskCorpus::new(options.output.clone()).unwrap(),

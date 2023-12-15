@@ -302,6 +302,10 @@ pub struct FuzzerOptions {
         requires = "replay"
     )]
     pub repeat: Option<usize>,
+
+    /// Initialize radnom number generator with given seed value
+    #[arg(short = 'S', long, value_name = "SEED", help_heading = "Fuzz Options")]
+    pub seed: Option<u64>,
 }
 
 impl FuzzerOptions {
