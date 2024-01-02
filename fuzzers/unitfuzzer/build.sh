@@ -28,13 +28,15 @@ elif [[ $1 == $FUZZER ]]; then
     if [[ ! -z $ENV_SETUP ]]; then
         source ${ENV_SETUP};
     fi
-    $CXX $CXXFLAGS -O3 -nolibc -nostdlib++ -o ${FUZZER_NAME} src/fuzzer.cc ${CARGO_TARGET_DIR}/lib${FUZZER_NAME}.a -L${LLVM_PATH}/lib -ldl -lpthread -lrt -lm -lc++ -lc;
+    #$CXX $CXXFLAGS -O3 -nostdlib++ -o ${FUZZER_NAME} src/fuzzer.cc ${CARGO_TARGET_DIR}/lib${FUZZER_NAME}.a -L${LLVM_PATH}/lib -lc++;
+    $CXX $CXXFLAGS -O3 -o ${FUZZER_NAME} src/fuzzer.cc experimental/mock.cc ${CARGO_TARGET_DIR}/lib${FUZZER_NAME}.a -lpthread -lm -lrt -ldl -lc;
+    #$CXX $CXXFLAGS -O3 -fPIC -o ${FUZZER_NAME} src/fuzzer.cc ${CARGO_TARGET_DIR}/lib${FUZZER_NAME}.a -lpthread;
 elif [[ $1 == $HARNESS ]]; then
     echo "Building harness for target $TARGET.";
     if [[ ! -z $ENV_SETUP ]]; then
         source ${ENV_SETUP};
     fi
-    $CC $CFLAGS -O3 -fPIC -shared -o harness_simple.so harness/harness_simple.c;
+    $CC $CFLAGS -O3 -fPIC -shared -o harness_simple.so harness/harness_simple.cc;
 else
     echo "Usage: ./build.sh <clean|fuzzer|harness>";
     exit 1;

@@ -129,9 +129,9 @@ pub fn main() {
 
 unsafe fn replay(options: &FuzzerOptions) -> Result<(), Error> {
     let lib = libloading::Library::new(options.clone().harness.unwrap()).unwrap();
-        let target_func: libloading::Symbol<
-            unsafe extern "C" fn(data: *const u8, size: usize) -> i32
-        > = lib.get(options.harness_function.as_bytes()).unwrap();
+    let target_func: libloading::Symbol<
+        unsafe extern "C" fn(data: *const u8, size: usize) -> i32
+    > = lib.get(options.harness_function.as_bytes()).unwrap();
 
     let frida_harness = |input: &BytesInput| {
         let target = input.target_bytes();
