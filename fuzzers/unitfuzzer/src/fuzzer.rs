@@ -172,7 +172,7 @@ unsafe fn fuzz(options: &FuzzerOptions) -> Result<(), Error> {
     #[cfg(not(feature = "tui"))]
     let monitor = MultiMonitor::new(|s| println!("{s}"));
     #[cfg(feature = "tui")]
-    let ui = TuiUI::with_version(String::from("UnitFuzzer"), String::from("0.3.0"), false);
+    let ui = TuiUI::with_version(String::from("UnitFuzzer"), String::from("0.3.1"), false);
     #[cfg(feature = "tui")]
     let monitor = TuiMonitor::new(ui);
 
@@ -193,12 +193,13 @@ unsafe fn fuzz(options: &FuzzerOptions) -> Result<(), Error> {
 
         // Fuzzing client
         (|state: Option<_>, mut mgr: LlmpRestartingEventManager<_, _>, _core_id| {
+            // # Instrumentation ##
             let gum = Gum::obtain();
-
             let coverage = CoverageRuntime::new();
-
             let mut frida_helper = FridaInstrumentationHelper::new(&gum, options, tuple_list!(coverage));
-            
+            // ####################
+
+            // # Feedback ##########
             // Create an observation channel using the coverage map
             let edges_observer = HitcountsMapObserver::new(StdMapObserver::from_mut_ptr(
                 "edges",
@@ -210,8 +211,17 @@ unsafe fn fuzz(options: &FuzzerOptions) -> Result<(), Error> {
 
             let map_feedback = MaxMapFeedback::tracking(&edges_observer, true, false);
             let time_feedback = TimeFeedback::with_observer(&time_observer);
+            // ####################
             
+            // # Stages ###########
+            // Setup a calibration stage to measure the average exec time and the bitmap size
             let calibration = CalibrationStage::new(&map_feedback);
+            // Setup a basic mutator with a mutational stage
+            let mutator = StdScheduledMutator::new(havoc_mutations().merge(tokens_mutations()));
+            let power_mutation = StdPowerMutationalStage::new(mutator);
+
+            let mut stages = tuple_list!(calibration, power_mutation);
+            // ####################
 
             // Feedback to rate the interestingness of an input
             // This one is composed by two Feedbacks in OR
@@ -220,12 +230,14 @@ unsafe fn fuzz(options: &FuzzerOptions) -> Result<(), Error> {
                 time_feedback
             );
 
+            // # Objective ########
             // Feedbacks to recognize an input as solution
             let mut objective = feedback_or_fast!(
                 CrashFeedback::new(),
                 TimeoutFeedback::new(),
                 feedback_and_fast!(ConstFeedback::from(false), AsanErrorsFeedback::new())
             );
+            // ####################
 
             // Initialize seed for random number generation
             let seed: u64 = match options.seed.is_some() {
@@ -233,6 +245,7 @@ unsafe fn fuzz(options: &FuzzerOptions) -> Result<(), Error> {
                 false => current_nanos(),
             };
 
+            // # State ############
             // If not restarting, create a State from scratch
             let mut state = state.unwrap_or_else(|| {
                 StdState::new(
@@ -244,24 +257,25 @@ unsafe fn fuzz(options: &FuzzerOptions) -> Result<(), Error> {
                     &mut objective,
                 ).unwrap()
             });
+            // ####################
 
             println!("We're a client, let's fuzz!");
 
-            // Setup a basic mutator with a mutational stage
-            let mutator = StdScheduledMutator::new(havoc_mutations().merge(tokens_mutations()));
-
-            let power_mutation = StdPowerMutationalStage::new(mutator);
-
+            // # Scheduler ########
             // A minimization+queue policy to get testcasess from the corpus
             let scheduler = IndexesLenTimeMinimizerScheduler::new(StdWeightedScheduler::with_schedule(
                 &mut state,
                 &edges_observer,
                 Some(PowerSchedule::FAST),
             ));
+            // ####################
 
+            // # Fuzzer ###########
             // A fuzzer with feedbacks and a corpus scheduler
             let mut fuzzer = StdFuzzer::new(scheduler, feedback, objective);
+            // ####################
 
+            // # Executor #########
             let observers = tuple_list!(
                 edges_observer,
                 time_observer,
@@ -280,6 +294,7 @@ unsafe fn fuzz(options: &FuzzerOptions) -> Result<(), Error> {
                 )?,
                 &mut frida_helper,
             );
+            // ####################
 
             // In case the corpus is empty (on first run), reset
             if state.must_load_initial_inputs() {
@@ -290,8 +305,6 @@ unsafe fn fuzz(options: &FuzzerOptions) -> Result<(), Error> {
                     });
                 println!("We imported {} inputs from disk.", state.corpus().count());
             }
-
-            let mut stages = tuple_list!(calibration, power_mutation);
 
             fuzzer.fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)?;
 

@@ -29,7 +29,7 @@ elif [[ $1 == $FUZZER ]]; then
         source ${ENV_SETUP};
     fi
     #$CXX $CXXFLAGS -O3 -o ${FUZZER_NAME} src/fuzzer.cc experimental/mock.cc ${CARGO_TARGET_DIR}/lib${FUZZER_NAME}.a -lpthread -lm -lrt -ldl -lc;
-    $CXX $CXXFLAGS -03 -o ${FUZZER_NAME} src/fuzzer.cc ${CARGO_TARGET_DIR}/lib${FUZZER_NAME}.a -lpthread -lm -lrt -ldl -lc;
+    $CXX $CXXFLAGS -O3 -o ${FUZZER_NAME} src/fuzzer.cc ${CARGO_TARGET_DIR}/lib${FUZZER_NAME}.a -lpthread -lm -lrt -ldl -lc;
 elif [[ $1 == $HARNESS ]]; then
     echo "Building harness for target $TARGET.";
     if [[ ! -z $ENV_SETUP ]]; then
