@@ -9,7 +9,7 @@ LLVM_PATH=${LLVM_PATH:-"/usr/lib/llvm"}
 ENV_SETUP=${ENV_SETUP:-""}
 
 if [[ ! $PROFILE == "dev" ]]; then
-    $PROFILE_PATH=$PROFILE;
+    PROFILE_PATH=$PROFILE;
 fi
 CARGO_TARGET_DIR=target/${TARGET}/${PROFILE_PATH}
 
@@ -23,14 +23,13 @@ if [[ $1 == $CLEAN ]]; then
     rm -f ./${FUZZER_NAME} ./harness*.so;
     cargo clean;
 elif [[ $1 == $FUZZER ]]; then
-    echo "Building fuzzer executable for target $TARGET.";
+    echo "Building fuzzer executable for target ${TARGET}.";
     cargo build --profile ${PROFILE} --target ${TARGET};
     if [[ ! -z $ENV_SETUP ]]; then
         source ${ENV_SETUP};
     fi
-    #$CXX $CXXFLAGS -O3 -nostdlib++ -o ${FUZZER_NAME} src/fuzzer.cc ${CARGO_TARGET_DIR}/lib${FUZZER_NAME}.a -L${LLVM_PATH}/lib -lc++;
-    $CXX $CXXFLAGS -O3 -o ${FUZZER_NAME} src/fuzzer.cc experimental/mock.cc ${CARGO_TARGET_DIR}/lib${FUZZER_NAME}.a -lpthread -lm -lrt -ldl -lc;
-    #$CXX $CXXFLAGS -O3 -fPIC -o ${FUZZER_NAME} src/fuzzer.cc ${CARGO_TARGET_DIR}/lib${FUZZER_NAME}.a -lpthread;
+    #$CXX $CXXFLAGS -O3 -o ${FUZZER_NAME} src/fuzzer.cc experimental/mock.cc ${CARGO_TARGET_DIR}/lib${FUZZER_NAME}.a -lpthread -lm -lrt -ldl -lc;
+    $CXX $CXXFLAGS -03 -o ${FUZZER_NAME} src/fuzzer.cc ${CARGO_TARGET_DIR}/lib${FUZZER_NAME}.a -lpthread -lm -lrt -ldl -lc;
 elif [[ $1 == $HARNESS ]]; then
     echo "Building harness for target $TARGET.";
     if [[ ! -z $ENV_SETUP ]]; then
