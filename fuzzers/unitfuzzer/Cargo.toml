@@ -1,6 +1,6 @@
 [package]
 name = "unitfuzzer"
-version = "0.3.1"
+version = "0.4.0"
 authors = ["Jan Brandstetter"]
 edition = "2021"
 

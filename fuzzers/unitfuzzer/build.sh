@@ -5,7 +5,6 @@ FUZZER_NAME=${FUZZER_NAME:-"unitfuzzer"}
 PROFILE=${PROFILE:-"dev"}
 PROFILE_PATH="debug"
 TARGET=${TARGET:-"x86_64-unknown-linux-gnu"}
-LLVM_PATH=${LLVM_PATH:-"/usr/lib/llvm"}
 ENV_SETUP=${ENV_SETUP:-""}
 
 if [[ ! $PROFILE == "dev" ]]; then
@@ -28,7 +27,8 @@ elif [[ $1 == $FUZZER ]]; then
     if [[ ! -z $ENV_SETUP ]]; then
         source ${ENV_SETUP};
     fi
-    #$CXX $CXXFLAGS -O3 -o ${FUZZER_NAME} src/fuzzer.cc experimental/mock.cc ${CARGO_TARGET_DIR}/lib${FUZZER_NAME}.a -lpthread -lm -lrt -ldl -lc;
+    # For debug builds because of unresolved dependencies regarding older glibc version
+    # $CXX $CXXFLAGS -O3 -o ${FUZZER_NAME} src/fuzzer.cc experimental/mock.cc ${CARGO_TARGET_DIR}/lib${FUZZER_NAME}.a -lpthread -lm -lrt -ldl -lc;
     $CXX $CXXFLAGS -O3 -o ${FUZZER_NAME} src/fuzzer.cc ${CARGO_TARGET_DIR}/lib${FUZZER_NAME}.a -lpthread -lm -lrt -ldl -lc;
 elif [[ $1 == $HARNESS ]]; then
     echo "Building harness for target $TARGET.";

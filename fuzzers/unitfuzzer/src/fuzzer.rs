@@ -1,7 +1,7 @@
+use core::time::Duration;
 use frida_gum::Gum;
 use libafl::{
     corpus::{
-        //CachedOnDiskCorpus,
         InMemoryCorpus,
         Corpus,
         OnDiskCorpus,
@@ -15,6 +15,7 @@ use libafl::{
     executors::{
         ExitKind,
         inprocess::InProcessExecutor,
+        timeout::TimeoutExecutor,
     },
     feedbacks::{
         CrashFeedback,
@@ -102,7 +103,6 @@ use libafl_frida::{
 use mimalloc::MiMalloc;
 use std::fs::File;
 use std::io::Read;
-//use std::path::PathBuf;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -172,7 +172,7 @@ unsafe fn fuzz(options: &FuzzerOptions) -> Result<(), Error> {
     #[cfg(not(feature = "tui"))]
     let monitor = MultiMonitor::new(|s| println!("{s}"));
     #[cfg(feature = "tui")]
-    let ui = TuiUI::with_version(String::from("UnitFuzzer"), String::from("0.3.1"), false);
+    let ui = TuiUI::with_version(String::from("UnitFuzzer"), String::from("0.4.0"), false);
     #[cfg(feature = "tui")]
     let monitor = TuiMonitor::new(ui);
 
@@ -239,13 +239,13 @@ unsafe fn fuzz(options: &FuzzerOptions) -> Result<(), Error> {
             );
             // ####################
 
+            // # State ############
             // Initialize seed for random number generation
             let seed: u64 = match options.seed.is_some() {
                 true => options.seed.unwrap(),
                 false => current_nanos(),
             };
 
-            // # State ############
             // If not restarting, create a State from scratch
             let mut state = state.unwrap_or_else(|| {
                 StdState::new(
@@ -282,17 +282,22 @@ unsafe fn fuzz(options: &FuzzerOptions) -> Result<(), Error> {
                 AsanErrorsObserver::new(&ASAN_ERRORS),
             );
 
-            // Create the executor for an in-process function with just one observer for edge coverage
-            let mut executor = FridaInProcessExecutor::new(
-                &gum,
-                InProcessExecutor::new(
-                    &mut frida_harness,
-                    observers,
-                    &mut fuzzer,
-                    &mut state,
-                    &mut mgr,
-                )?,
-                &mut frida_helper,
+            let timeout: Duration = options.timeout;
+
+            // Create the executor for an in-process function with timeout detection
+            let mut executor = TimeoutExecutor::new(
+                FridaInProcessExecutor::new(
+                    &gum,
+                    InProcessExecutor::new(
+                        &mut frida_harness,
+                        observers,
+                        &mut fuzzer,
+                        &mut state,
+                        &mut mgr,
+                    )?,
+                    &mut frida_helper,  
+                ),
+                timeout,
             );
             // ####################
 

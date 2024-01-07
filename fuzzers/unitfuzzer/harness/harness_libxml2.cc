@@ -9,7 +9,7 @@
 #include <libxml/tree.h>
 
 /**
- * Harenss function
+ * Harness function
  */
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     xmlDocPtr doc; /* the resulting document tree */
